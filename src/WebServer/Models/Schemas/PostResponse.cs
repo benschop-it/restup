@@ -9,6 +9,7 @@ namespace Restup.Webserver.Models.Schemas
     {
         public enum ResponseStatus : int
         {
+            OK = 200,
             Created = 201,
             Conflict = 409
         };

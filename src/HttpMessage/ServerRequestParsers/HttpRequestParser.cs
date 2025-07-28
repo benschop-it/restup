@@ -1,5 +1,6 @@
 ﻿using Restup.HttpMessage.Models.Contracts;
 using Restup.HttpMessage.Plumbing;
+using Restup.WebServer;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -76,6 +77,14 @@ namespace Restup.HttpMessage.ServerRequestParsers
                 }
 
                 request.IsComplete = requestPipeline.All(p => p.IsSucceeded);
+                Debug.WriteLine($"URI:{request.Uri.ToString()}");
+                OperationController.TryRunOperationByRequestUri(request);  //Execute functionality based on the requested URI.
+                if (request.Content != null)
+                {
+                    Debug.WriteLine($"RequestContentLength: {request.Content.Length}");
+                    RestupTest.requestContent = request.Content;
+                    Debug.WriteLine("The byte[] data has been saved to requestContent.");
+                }
             }
             catch (Exception ex)
             {

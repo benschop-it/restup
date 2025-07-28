@@ -9,6 +9,9 @@ using Restup.HttpMessage.Headers.Response;
 using Restup.HttpMessage.Models.Contracts;
 using Restup.HttpMessage.Models.Schemas;
 using Restup.WebServer.Logging;
+using System.Diagnostics;
+using System.Text;
+using System.Threading;
 
 namespace Restup.Webserver.Http
 {
@@ -57,31 +60,43 @@ namespace Restup.Webserver.Http
             _log.Info($"Webserver stopped listening on port {_port}");
         }
 
-        private async void ProcessRequestAsync(StreamSocketListener sender, StreamSocketListenerConnectionReceivedEventArgs args)
-        {
+        private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
+
+        private async void ProcessRequestAsync(StreamSocketListener sender, StreamSocketListenerConnectionReceivedEventArgs args) {
             await Task.Run(async () =>
             {
-                try
-                {
-                    using (var inputStream = args.Socket.InputStream)
-                    {
+                var requestLog = new StringBuilder(); // Local log buffer
+
+                try {
+                    using (var inputStream = args.Socket.InputStream) {
                         var request = await MutableHttpServerRequest.Parse(inputStream);
+
+                        requestLog.AppendLine("[HttpServer.ProcessRequestAsync] [Request]");
+                        requestLog.AppendLine($"    Uri = {request.Uri}");
+
+                        foreach (var header in request.Headers) {
+                            requestLog.AppendLine($"    Header = {header.Name}: {header.Value}");
+                        }
+
                         var httpResponse = await HandleRequestAsync(request);
+
+                        requestLog.AppendLine($"[HttpServer.ProcessRequestAsync] [Response]");
+                        requestLog.AppendLine($"    ContentType = {httpResponse.ContentType}");
+
+                        foreach (var header in httpResponse.Headers)
+                            requestLog.AppendLine($"    {header.Name}: {header.Value}");
+
+                        requestLog.AppendLine($"    HttpResponse = {httpResponse}");
 
                         await WriteResponseAsync(httpResponse, args.Socket);
                     }
-                }
-                catch (Exception ex)
-                {
-                    _log.Error($"Exception while handling process: {ex.Message}");
-                }
-                finally
-                {
-                    try
-                    {
-                        args.Socket.Dispose();
-                    }
-                    catch { }
+                } catch (Exception ex) {
+                    requestLog.AppendLine($"[HttpServer.ProcessRequestAsync] Exception: {ex.Message}");
+                } finally {
+                    try { args.Socket.Dispose(); } catch { }
+
+                    // Emit full log block at once
+                    Debug.WriteLine(requestLog.ToString());
                 }
             });
         }
